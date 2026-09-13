@@ -11,12 +11,17 @@ from urllib.request import urlopen
 TOOLS_SCHEMA = [
     {
         "name": "search_tracks",
-        "description": "Search real songs in the iTunes catalog.",
+        "description": "Search real songs in the music catalog for discovery or factual lookup.",
         "parameters": {
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Song, artist, genre, or mood to search."},
                 "limit": {"type": "integer", "description": "Number of tracks, from 1 to 10.", "default": 5, "minimum": 1, "maximum": 10},
+                "update_playlist": {
+                    "type": "boolean",
+                    "description": "True for recommendations or playlist building. False when searching only to answer a question about music.",
+                    "default": False,
+                },
             },
             "required": ["query"],
         },
@@ -48,7 +53,7 @@ def _track(item: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def execute_search_tracks(query: str, limit: int = 5) -> str:
+def execute_search_tracks(query: str, limit: int = 5, update_playlist: bool = False) -> str:
     """Search iTunes and keep only the newest normalized results in memory."""
     if not isinstance(query, str) or not query.strip():
         return json.dumps({"status": "ERROR", "message": "A non-empty search query is required."})

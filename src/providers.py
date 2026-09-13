@@ -10,14 +10,14 @@ load_dotenv()
 
 
 class BaseLLMProvider:
-    def generate(self, prompt: str, system_prompt: str = "") -> str:
+    def generate(self, prompt: str, system_prompt: str = "", temperature: float = 0.3) -> str:
         raise NotImplementedError
 
-    def generate_with_tools(self, prompt: str, tools_schema: List[Dict[str, Any]], system_prompt: str = "") -> Dict[str, Any]:
+    def generate_with_tools(self, prompt: str, tools_schema: List[Dict[str, Any]], system_prompt: str = "", temperature: float = 0.2) -> Dict[str, Any]:
         raise NotImplementedError
 
-    def generate_stream(self, prompt: str, system_prompt: str = ""):
-        yield self.generate(prompt, system_prompt)
+    def generate_stream(self, prompt: str, system_prompt: str = "", temperature: float = 0.3):
+        yield self.generate(prompt, system_prompt, temperature)
 
 
 class MockOfflineProvider(BaseLLMProvider):
@@ -26,10 +26,10 @@ class MockOfflineProvider(BaseLLMProvider):
     def __init__(self):
         self.model_name = "Offline-Mock-Model-2026"
 
-    def generate(self, prompt: str, system_prompt: str = "") -> str:
+    def generate(self, prompt: str, system_prompt: str = "", temperature: float = 0.3) -> str:
         return "MoodMix can search the music catalog and export selected results as a CSV for manual Soundiiz import."
 
-    def generate_with_tools(self, prompt: str, tools_schema: List[Dict[str, Any]], system_prompt: str = "") -> Dict[str, Any]:
+    def generate_with_tools(self, prompt: str, tools_schema: List[Dict[str, Any]], system_prompt: str = "", temperature: float = 0.2) -> Dict[str, Any]:
         lower = prompt.lower()
         has_search = "observation from search_tracks:" in lower
         wants_export = any(word in lower for word in ("export", "playlist", "xuất"))
@@ -45,7 +45,8 @@ class MockOfflineProvider(BaseLLMProvider):
                 return {"type": "text", "content": "No matching tracks were found in the music catalog.", "thought": "The search was empty."}
             return {"type": "text", "content": "Here are the tracks from the latest music search.", "thought": "Results are ready."}
         if any(word in lower for word in ("find", "song", "songs", "music", "track", "playlist", "tìm", "nhạc")):
-            query = "electronic" if "electronic" in lower else prompt.split("\n", 1)[0]
+            latest_user = re.findall(r"(?:^|\n)User:\s*([^\n]+)", prompt)
+            query = "electronic" if "electronic" in (latest_user[-1].lower() if latest_user else lower) else (latest_user[-1] if latest_user else prompt.split("\n", 1)[0])
             return {"type": "tool_call", "tool_name": "search_tracks", "arguments": {"query": query, "limit": 5}, "thought": "Music data is required."}
         return {"type": "text", "content": self.generate(prompt, system_prompt), "thought": "A direct answer is sufficient."}
 
@@ -55,18 +56,22 @@ class GeminiProvider(BaseLLMProvider):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         self.model_name = model or os.getenv("LLM_MODEL") or "gemini-2.5-flash"
 
-    def generate(self, prompt: str, system_prompt: str = "") -> str:
+    def generate(self, prompt: str, system_prompt: str = "", temperature: float = 0.3) -> str:
         if not self.api_key or self.api_key == "your_gemini_api_key_here":
             return MockOfflineProvider().generate(prompt, system_prompt)
         try:
             from google import genai
             client = genai.Client(api_key=self.api_key)
-            response = client.models.generate_content(model=self.model_name, contents=f"{system_prompt}\n\n{prompt}")
+            response = client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config={"system_instruction": system_prompt, "temperature": temperature},
+            )
             return response.text or ""
         except Exception as error:
             return f"[Gemini Exception]: {error}"
 
-    def generate_with_tools(self, prompt: str, tools_schema: List[Dict[str, Any]], system_prompt: str = "") -> Dict[str, Any]:
+    def generate_with_tools(self, prompt: str, tools_schema: List[Dict[str, Any]], system_prompt: str = "", temperature: float = 0.2) -> Dict[str, Any]:
         if not self.api_key or self.api_key == "your_gemini_api_key_here":
             return MockOfflineProvider().generate_with_tools(prompt, tools_schema, system_prompt)
         try:
@@ -74,7 +79,7 @@ class GeminiProvider(BaseLLMProvider):
             from google.genai import types
             declarations = [{"name": tool["name"], "description": tool.get("description", ""), "parameters": tool["parameters"]} for tool in tools_schema if tool.get("name") and tool.get("parameters")]
             client = genai.Client(api_key=self.api_key)
-            response = client.models.generate_content(model=self.model_name, contents=prompt, config=types.GenerateContentConfig(system_instruction=system_prompt, tools=[{"function_declarations": declarations}], temperature=0.2))
+            response = client.models.generate_content(model=self.model_name, contents=prompt, config=types.GenerateContentConfig(system_instruction=system_prompt, tools=[{"function_declarations": declarations}], temperature=temperature))
             if response.function_calls:
                 call = response.function_calls[0]
                 return {"type": "tool_call", "tool_name": call.name, "arguments": dict(call.args or {}), "thought": "LLM selected a tool."}
@@ -82,14 +87,16 @@ class GeminiProvider(BaseLLMProvider):
         except Exception:
             return MockOfflineProvider().generate_with_tools(prompt, tools_schema, system_prompt)
 
-    def generate_stream(self, prompt: str, system_prompt: str = ""):
+    def generate_stream(self, prompt: str, system_prompt: str = "", temperature: float = 0.3):
         if not self.api_key or self.api_key == "your_gemini_api_key_here":
             yield from MockOfflineProvider().generate_stream(prompt, system_prompt)
             return
         try:
             from google import genai
             client = genai.Client(api_key=self.api_key)
-            for chunk in client.models.generate_content_stream(model=self.model_name, contents=f"{system_prompt}\n\n{prompt}"):
+            from google.genai import types
+            config = types.GenerateContentConfig(system_instruction=system_prompt, temperature=temperature)
+            for chunk in client.models.generate_content_stream(model=self.model_name, contents=prompt, config=config):
                 if chunk.text:
                     yield chunk.text
         except Exception:
@@ -108,22 +115,22 @@ class OpenAIProvider(BaseLLMProvider):
         from openai import OpenAI
         return OpenAI(api_key=self.api_key, **({"base_url": self.base_url} if self.base_url else {}))
 
-    def generate(self, prompt: str, system_prompt: str = "") -> str:
+    def generate(self, prompt: str, system_prompt: str = "", temperature: float = 0.3) -> str:
         if not self.api_key or self.api_key == "your_openai_api_key_here":
             return MockOfflineProvider().generate(prompt, system_prompt)
         try:
             messages = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + [{"role": "user", "content": prompt}]
-            return self._client().chat.completions.create(model=self.model_name, messages=messages).choices[0].message.content or ""
+            return self._client().chat.completions.create(model=self.model_name, messages=messages, temperature=temperature).choices[0].message.content or ""
         except Exception as error:
             return f"[LLM Exception]: {error}"
 
-    def generate_with_tools(self, prompt: str, tools_schema: List[Dict[str, Any]], system_prompt: str = "") -> Dict[str, Any]:
+    def generate_with_tools(self, prompt: str, tools_schema: List[Dict[str, Any]], system_prompt: str = "", temperature: float = 0.2) -> Dict[str, Any]:
         if not self.api_key or self.api_key in {"your_openai_api_key_here", "your_deepseek_api_key_here"}:
             return MockOfflineProvider().generate_with_tools(prompt, tools_schema, system_prompt)
         try:
             tools = [{"type": "function", "function": {"name": tool["name"], "description": tool.get("description", ""), "parameters": tool.get("parameters", {})}} for tool in tools_schema if tool.get("name")]
             messages = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + [{"role": "user", "content": prompt}]
-            message = self._client().chat.completions.create(model=self.model_name, messages=messages, tools=tools or None, tool_choice="auto" if tools else None).choices[0].message
+            message = self._client().chat.completions.create(model=self.model_name, messages=messages, tools=tools or None, tool_choice="auto" if tools else None, temperature=temperature).choices[0].message
             if message.tool_calls:
                 call = message.tool_calls[0]
                 return {"type": "tool_call", "tool_name": call.function.name, "arguments": json.loads(call.function.arguments or "{}"), "thought": "LLM selected a tool."}
@@ -131,13 +138,13 @@ class OpenAIProvider(BaseLLMProvider):
         except Exception:
             return MockOfflineProvider().generate_with_tools(prompt, tools_schema, system_prompt)
 
-    def generate_stream(self, prompt: str, system_prompt: str = ""):
+    def generate_stream(self, prompt: str, system_prompt: str = "", temperature: float = 0.3):
         if not self.api_key or self.api_key in {"your_openai_api_key_here", "your_deepseek_api_key_here"}:
             yield from MockOfflineProvider().generate_stream(prompt, system_prompt)
             return
         try:
             messages = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + [{"role": "user", "content": prompt}]
-            for chunk in self._client().chat.completions.create(model=self.model_name, messages=messages, stream=True):
+            for chunk in self._client().chat.completions.create(model=self.model_name, messages=messages, stream=True, temperature=temperature):
                 content = chunk.choices[0].delta.content if chunk.choices else None
                 if content:
                     yield content

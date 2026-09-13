@@ -1,9 +1,73 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MoodMix</title><link rel="stylesheet" href="/static/styles.css"></head>
-<body><main>
-  <section class="chat-panel"><header><div class="brand"><span>♪</span><div><strong>MoodMix</strong><small>Music discovery agent</small></div></div><div><button id="new-chat" class="quiet">New Chat</button><button id="clear-chat" class="quiet">Clear</button></div></header>
-    <div id="chat" class="chat"><div id="empty" class="empty"><h1>Find your next soundtrack.</h1><p>Ask MoodMix for songs, moods, or a playlist export.</p><div class="suggestions"><button>Top 10 songs for a happy day</button><button>Find 5 Linkin Park songs</button><button>Build a high-energy gym playlist</button><button>Create a chill late-night playlist</button></div></div></div>
-    <form id="composer"><textarea id="message" rows="1" placeholder="Message MoodMix..."></textarea><button id="send" aria-label="Send message">↑</button></form>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MoodMix</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<main>
+  <section class="chat-panel">
+    <header>
+      <div class="brand"><span>♪</span><div><strong>MoodMix</strong><small>Music discovery agent</small></div></div>
+      <div class="header-actions">
+        <button id="settings-button" class="icon-button" title="Customize MoodMix">⚙</button>
+        <button id="new-chat" class="quiet">New Chat</button>
+        <button id="clear-chat" class="quiet">Clear</button>
+      </div>
+      <section id="settings-panel" class="popover settings-panel" hidden>
+        <div class="popover-title"><strong>Customize MoodMix</strong><button class="icon-button close-popover">×</button></div>
+        <label>Creativity <output id="temperature-value">0.3</output><input id="temperature" type="range" min="0" max="1.5" step="0.1" value="0.3"></label>
+        <label>Maximum tracks <output id="max-tracks-value">10</output><input id="max-tracks" type="range" min="1" max="10" step="1" value="10"></label>
+        <label>Response detail<select id="response-style"><option value="concise">Concise</option><option value="balanced" selected>Balanced</option><option value="detailed">Detailed</option></select></label>
+        <label>Response language<select id="language"><option value="auto" selected>Auto-detect</option><option value="english">English</option><option value="vietnamese">Vietnamese</option></select></label>
+        <label class="switch-row"><span>Retry an empty search once</span><input id="retry-empty" type="checkbox" checked></label>
+        <label>Preview volume <output id="volume-value">70%</output><input id="volume" type="range" min="0" max="1" step="0.05" value="0.7"></label>
+      </section>
+    </header>
+
+    <div id="chat" class="chat">
+      <div id="empty" class="empty">
+        <h1>Find your next soundtrack.</h1>
+        <p>Ask for recommendations, build a playlist, or learn about a song.</p>
+        <div class="suggestions">
+          <button>Top 10 songs for a happy day</button>
+          <button>Find 5 Linkin Park songs</button>
+          <button>What is Numb by Linkin Park about?</button>
+          <button>Create a chill late-night playlist</button>
+        </div>
+      </div>
+    </div>
+    <form id="composer">
+      <textarea id="message" rows="1" placeholder="Message MoodMix..."></textarea>
+      <button id="send" aria-label="Send message">↑</button>
+    </form>
   </section>
-  <aside class="playlist-panel"><div class="playlist-head"><div><p>GENERATED PLAYLIST</p><h2 id="playlist-title">Your queue</h2><span id="track-count">No tracks yet</span></div><span class="orb">♪</span></div><div id="export"></div><div id="tracks" class="tracks"><div class="playlist-empty">Your search results will appear here.</div></div></aside>
-</main><script src="/static/app.js"></script></body></html>
+
+  <aside class="playlist-panel">
+    <div class="playlist-head">
+      <div><p>GENERATED PLAYLIST</p><h2 id="playlist-title">Your queue</h2><span id="track-count">No tracks yet</span></div>
+      <div class="playlist-head-actions">
+        <div class="history-wrap">
+          <button id="history-button" class="icon-button large" title="Playlist history">↶<b id="history-count">0</b></button>
+          <section id="history-panel" class="popover history-panel" hidden><div class="popover-title"><strong>Playlist history</strong><button class="icon-button close-history">×</button></div><div id="history-list" class="history-list"><p>No saved playlists yet.</p></div></section>
+        </div>
+        <span class="orb">♪</span>
+      </div>
+    </div>
+    <div class="playlist-actions"><button id="save-playlist" disabled>♡ Save playlist</button><div id="export"></div></div>
+    <div id="tracks" class="tracks"><div class="playlist-empty">Your search results will appear here.</div></div>
+    <section id="player" class="player" hidden>
+      <img id="player-art" alt="">
+      <div class="player-main">
+        <div class="player-meta"><strong id="player-title">Track title</strong><span id="player-artist">Artist</span></div>
+        <div class="player-controls"><button id="player-toggle" aria-label="Play or pause">▶</button><span id="current-time">0:00</span><input id="progress" type="range" min="0" max="100" value="0"><span id="total-time">0:00</span></div>
+      </div>
+    </section>
+  </aside>
+</main>
+<div id="toast" role="status"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

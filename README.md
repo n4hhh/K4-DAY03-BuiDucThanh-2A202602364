@@ -41,6 +41,14 @@ cp config/test_cases.example.json config/test_cases.json
 python src/app.py --all
 ```
 
+### Chạy giao diện MoodMix
+```bash
+python src/ui.py
+```
+
+Mở `http://127.0.0.1:8000`. Giao diện hỗ trợ streamed answer, live ReAct trace,
+track preview, playlist history, CSV download và các tùy chỉnh cho từng người dùng.
+
 **Kỳ vọng Output màn hình:**
 ```text
 ✅ [MOCK OFFLINE MODE PASS]: Môi trường đã sẵn sàng! 
